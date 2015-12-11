@@ -222,7 +222,9 @@ void traverse_root(uint8_t *image_buf, struct bpb33* bpb, int* clust_ref)
     int i = 0;
     for ( ; i < bpb->bpbRootDirEnts; i++)
     {
-        uint16_t followclust = print_dirent(dirent, 0, clust_ref, image_buf, bpb);
+				clust_ref[getushort(dirent->deStartCluster)] = 1;
+				uint16_t followclust = print_dirent(dirent, 0, clust_ref, image_buf, bpb);
+				clust_ref[followclust] = 1;
         if (is_valid_cluster(followclust, bpb))
             follow_dir(followclust, 1, image_buf, bpb, clust_ref);
 
