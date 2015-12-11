@@ -14,11 +14,32 @@
 #include "fat.h"
 #include "dos.h"
 
-void checker(uint8_t *image_buf, struct bpb33 *bpb, int* clust_ref, uint16_t cluster)
-{
+//Divides, rounds up, used in sz_chck
+int div_round_up(int dividend, int divisor){
+	return (dividend + (divisor - 1)) / divisor;
+}
 
+//compares size in metadata to size in clusters
+void sz_check(int meta_size, int clust_count, struct bpb33* bpb){
+	int clust_size = bpb->bpbBytesPerSec * bpb->bpbSecPerClust;
+	int max_size = clust_count * clust_size;  //largest possible size according to cluster chain
+	int min_size = max_size - clust_size;   //smallest size according to cluster chain
+	if (meta_size > max_size){
+		printf("Big YIKES! -> Metadata is bigger than allocated clusters, has size %d, according to clusters size should be between %d and %d\n",
+				meta_size, min_size, max_size);
+    }
+  	if (meta_size < min_size){
+		  int no_bad_clust = div_round_up(min_size - meta_size, clust_size);
+			printf("Small YIKES! -> Metadata is smaller than allocated clusters, need to free %d cluster(s).\n", no_bad_clust);
+	}
+}
+
+int checker(uint8_t *image_buf, struct bpb33 *bpb, int* clust_ref, uint16_t cluster)
+{
+	int clust_count = 0;
     while (is_valid_cluster(cluster, bpb))
-    {
+    {	
+		clust_count ++;
         clust_ref[cluster] = 1; //good cluster
         cluster = get_fat_entry(cluster, image_buf, bpb);
     }
@@ -28,6 +49,7 @@ void checker(uint8_t *image_buf, struct bpb33 *bpb, int* clust_ref, uint16_t clu
     else{
       clust_ref[cluster] = 3; //bad boy
     }
+	return clust_count;
 }
 
 uint16_t print_dirent(struct direntry *dirent, int indent, int* clust_ref, uint8_t *image_buf, struct bpb33* bpb)
@@ -45,13 +67,13 @@ uint16_t print_dirent(struct direntry *dirent, int indent, int* clust_ref, uint8
     memcpy(extension, dirent->deExtension, 3);
     if (name[0] == SLOT_EMPTY)
     {
-	return followclust;
+		return followclust;
     }
 
     /* skip over deleted entries */
     if (((uint8_t)name[0]) == SLOT_DELETED)
     {
-	return followclust;
+		return followclust;
     }
 
     if (((uint8_t)name[0]) == 0x2E)
@@ -110,9 +132,11 @@ uint16_t print_dirent(struct direntry *dirent, int indent, int* clust_ref, uint8
 	int hidden = (dirent->deAttributes & ATTR_HIDDEN) == ATTR_HIDDEN;
 	int sys = (dirent->deAttributes & ATTR_SYSTEM) == ATTR_SYSTEM;
 	int arch = (dirent->deAttributes & ATTR_ARCHIVE) == ATTR_ARCHIVE;
-  int start_cluster = getushort(dirent->deStartCluster);
+  	int start_cluster = getushort(dirent->deStartCluster);
+	int clust_num = 0;
 	size = getulong(dirent->deFileSize);
-  checker(image_buf, bpb, clust_ref, start_cluster);
+	clust_num = checker(image_buf, bpb, clust_ref, start_cluster);
+	sz_check(size, clust_num, bpb);
 	printf("%s.%s (%u bytes) (starting cluster %d) %c%c%c%c\n",
 	       name, extension, size, start_cluster,
 	       ro?'r':' ',
