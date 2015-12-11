@@ -307,11 +307,19 @@ void orphan_alloc(uint8_t *image_buf, struct bpb33* bpb, u_int16_t cluster, int 
 	write_dirent(dirent, buffer, start_cluster, size);
 }
 void fix_FAT(uint8_t *image_buf, struct bpb33* bpb, int* clust_ref){
-  uint16_t cluster = 2;
+  uint16_t cluster = 0;
+	uint16_t fatent  = 0;
+	int foundFree = 0;
 	int k = 0;
   for(int i = 0; i < 2880; i++){
-  	if ((clust_ref[i] == 0) && ((cluster & FAT12_MASK) != (FAT12_MASK & CLUST_FREE))){
+		fatent = get_fat_entry(cluster, image_buf, bpb);
+		if ((fatent & FAT12_MASK) == (FAT12_MASK & CLUST_FREE)){
+				foundFree = 1;
+		}
+		if (foundFree && (clust_ref[i] == 0) && ((fatent & FAT12_MASK) != (FAT12_MASK & CLUST_FREE))){
 			k++;
+			printf("i is: %d, fatent is %d\n", i, fatent);
+			printf("Orphan found, get a parent!\n");
 			orphan_alloc(image_buf, bpb, cluster, k);
 			//printf("i is: %d\n", i);
 			//printf("Orphan found, get a parent!\n");
