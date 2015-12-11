@@ -7,6 +7,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <string.h>
+#include <ctype.h>
 
 #include "bootsect.h"
 #include "bpb.h"
@@ -224,12 +225,91 @@ void traverse_root(uint8_t *image_buf, struct bpb33* bpb, int* clust_ref)
     }
 }
 
+/* write the values into a directory entry */
+void write_dirent(struct direntry *dirent, char *filename,
+		  uint16_t start_cluster, uint32_t size)
+{
+    char *p, *p2;
+    char *uppername;
+    int len, i;
+
+    /* clean out anything old that used to be here */
+    memset(dirent, 0, sizeof(struct direntry));
+
+    /* extract just the filename part */
+    uppername = strdup(filename);
+    p2 = uppername;
+    for (i = 0; i < strlen(filename); i++)
+    {
+	if (p2[i] == '/' || p2[i] == '\\')
+	{
+	    uppername = p2+i+1;
+	}
+    }
+
+    /* convert filename to upper case */
+    for (i = 0; i < strlen(uppername); i++)
+    {
+	uppername[i] = toupper(uppername[i]);
+    }
+
+    /* set the file name and extension */
+    memset(dirent->deName, ' ', 8);
+    p = strchr(uppername, '.');
+    memcpy(dirent->deExtension, "___", 3);
+    if (p == NULL)
+    {
+	fprintf(stderr, "No filename extension given - defaulting to .___\n");
+    }
+    else
+    {
+	*p = '\0';
+	p++;
+	len = strlen(p);
+	if (len > 3) len = 3;
+	memcpy(dirent->deExtension, p, len);
+    }
+
+    if (strlen(uppername)>8)
+    {
+	uppername[8]='\0';
+    }
+    memcpy(dirent->deName, uppername, strlen(uppername));
+    free(p2);
+
+    /* set the attributes and file size */
+    dirent->deAttributes = ATTR_NORMAL;
+    putushort(dirent->deStartCluster, start_cluster);
+    putulong(dirent->deFileSize, size);
+
+    /* could also set time and date here if we really
+       cared... */
+}
+
+void orphan_alloc(uint8_t *image_buf, struct bpb33* bpb, u_int16_t cluster, int orph_num){ //adds a new root directory address for orphan block
+	uint16_t start_cluster = cluster;
+	int j = 0;
+	while (is_valid_cluster(cluster, bpb)){
+		cluster = get_fat_entry(cluster, image_buf, bpb);
+		j++;
+	}
+	set_fat_entry(cluster, FAT12_MASK & CLUST_EOFS, image_buf, bpb);
+	int clust_size = bpb->bpbBytesPerSec * bpb->bpbSecPerClust;
+	int size = j * clust_size;
+	char buffer[64];
+	snprintf(buffer, 64, "found%d.dat", orph_num);
+	struct direntry *dirent = NULL;
+	write_dirent(dirent, buffer, start_cluster, size);
+}
 void fix_FAT(uint8_t *image_buf, struct bpb33* bpb, int* clust_ref){
   uint16_t cluster = 2;
+	int k = 0;
   for(int i = 0; i < 2880; i++){
   	if ((clust_ref[i] == 0) && ((cluster & FAT12_MASK) != (FAT12_MASK & CLUST_FREE))){
-			printf("i is: %d\n", i);
-			printf("Orphan found, get a parent!\n");
+			k++;
+			orphan_alloc(image_buf, bpb, cluster, k);
+			//printf("i is: %d\n", i);
+			//printf("Orphan found, get a parent!\n");
     }
     cluster++;
   }
