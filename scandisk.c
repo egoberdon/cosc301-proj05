@@ -37,9 +37,12 @@ void sz_check(int meta_size, int clust_count, struct bpb33* bpb){
 int checker(uint8_t *image_buf, struct bpb33 *bpb, int* clust_ref, uint16_t cluster)
 {
 	int clust_count = 0;
-    while (is_valid_cluster(cluster, bpb))
-    {	
-		clust_count ++;
+  while (is_valid_cluster(cluster, bpb))
+    {
+		    clust_count ++;
+        if ((cluster & FAT12_MASK) >= CLUST_BAD){
+          printf("Bad\n");
+        }
         clust_ref[cluster] = 1; //good cluster
         cluster = get_fat_entry(cluster, image_buf, bpb);
     }
@@ -132,7 +135,7 @@ uint16_t print_dirent(struct direntry *dirent, int indent, int* clust_ref, uint8
 	int hidden = (dirent->deAttributes & ATTR_HIDDEN) == ATTR_HIDDEN;
 	int sys = (dirent->deAttributes & ATTR_SYSTEM) == ATTR_SYSTEM;
 	int arch = (dirent->deAttributes & ATTR_ARCHIVE) == ATTR_ARCHIVE;
-  	int start_cluster = getushort(dirent->deStartCluster);
+  int start_cluster = getushort(dirent->deStartCluster);
 	int clust_num = 0;
 	size = getulong(dirent->deFileSize);
 	clust_num = checker(image_buf, bpb, clust_ref, start_cluster);
@@ -187,6 +190,23 @@ void traverse_root(uint8_t *image_buf, struct bpb33* bpb, int* clust_ref)
 
         dirent++;
     }
+}
+
+void fix_FAT(uint8_t *image_buf, struct bpb33* bpb, int* clust_ref){
+  uint16_t cluster = 0;
+  uint16_t previous_cluster = 0;
+  for(int i = 0; i < 2880; i++){
+    if (clust_ref[i] == 3){
+      set_fat_entry(cluster, CLUST_FREE, image_buf, bpb);
+    }
+    else if (clust_ref[i] == 0){
+      if ((cluster & FAT12_MASK) != CLUST_FREE){//assuming this works
+
+      }
+    }
+    previous_cluster = cluster;
+    cluster = get_fat_entry(cluster, image_buf, bpb);
+  }
 }
 
 void usage(char *progname) {
