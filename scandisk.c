@@ -321,8 +321,6 @@ void fix_FAT(uint8_t *image_buf, struct bpb33* bpb, int* clust_ref){
 			printf("i is: %d, fatent is %d\n", i, fatent);
 			printf("Orphan found, get a parent!\n");
 			orphan_alloc(image_buf, bpb, cluster, k);
-			//printf("i is: %d\n", i);
-			//printf("Orphan found, get a parent!\n");
     }
     cluster++;
   }
