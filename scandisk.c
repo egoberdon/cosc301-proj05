@@ -68,15 +68,21 @@ int checker(uint8_t *image_buf, struct bpb33 *bpb, int* clust_ref, uint16_t clus
 		    clust_count ++;
         if ((cluster & FAT12_MASK) == (CLUST_BAD & FAT12_MASK)){
           printf("Bad\n");
+					//set previous cluster to EOF
+					//free earl
+					break;
         }
-        clust_ref[cluster] = 1; //good cluster
+        clust_ref[cluster] = 1; //we reached this cluster
         cluster = get_fat_entry(cluster, image_buf, bpb);
     }
     if (is_end_of_file(cluster)){
-      clust_ref[cluster] = 2; //end of file
+      clust_ref[cluster] = 1;
     }
     else{
-      clust_ref[cluster] = 3; //bad boy
+			//this is a bad block?
+			//set prev EOF
+			//Free
+      // clust_ref[cluster] = 1;
     }
 	return clust_count;
 }
@@ -219,19 +225,13 @@ void traverse_root(uint8_t *image_buf, struct bpb33* bpb, int* clust_ref)
 }
 
 void fix_FAT(uint8_t *image_buf, struct bpb33* bpb, int* clust_ref){
-  uint16_t cluster = 0;
-  uint16_t previous_cluster = 0;
+  uint16_t cluster = 2;
   for(int i = 0; i < 2880; i++){
-    if (clust_ref[i] == 3){
-      set_fat_entry(cluster, CLUST_FREE, image_buf, bpb);
+  	if ((clust_ref[i] == 0) && ((cluster & FAT12_MASK) != (FAT12_MASK & CLUST_FREE))){
+			printf("i is: %d\n", i);
+			printf("Orphan found, get a parent!\n");
     }
-    else if (clust_ref[i] == 0){
-      if ((cluster & FAT12_MASK) != CLUST_FREE){//assuming this works
-
-      }
-    }
-    previous_cluster = cluster;
-    cluster = get_fat_entry(cluster, image_buf, bpb);
+    cluster++;
   }
 }
 
@@ -258,6 +258,7 @@ int main(int argc, char** argv) {
       clust_ref[i] = 0;
     }
     traverse_root(image_buf, bpb, clust_ref);
+		fix_FAT(image_buf, bpb, clust_ref);
 
     unmmap_file(image_buf, &fd);
     return 0;
