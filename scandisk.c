@@ -64,26 +64,29 @@ void sz_check(int meta_size, int clust_count, struct bpb33* bpb, int start_clust
 int checker(uint8_t *image_buf, struct bpb33 *bpb, int* clust_ref, uint16_t cluster)
 {
 	int clust_count = 0;
+	uint16_t previous_cluster = 0;
   while (is_valid_cluster(cluster, bpb))
     {
 		    clust_count ++;
         if ((cluster & FAT12_MASK) == (CLUST_BAD & FAT12_MASK)){
-          printf("Bad\n");
-					//set previous cluster to EOF
-					//free earl
+          printf("Found bad cluster\n");
+					set_fat_entry(previous_cluster, FAT12_MASK & CLUST_EOFS, image_buf, bpb); //set previous to EOF
+					set_fat_entry(cluster, FAT12_MASK & CLUST_FREE, image_buf, bpb); //free current
+					cluster = previous_cluster;
 					break;
         }
         clust_ref[cluster] = 1; //we reached this cluster
+				previous_cluster = cluster;
         cluster = get_fat_entry(cluster, image_buf, bpb);
     }
     if (is_end_of_file(cluster)){
       clust_ref[cluster] = 1;
     }
     else{
-			//this is a bad block?
-			//set prev EOF
-			//Free
-      // clust_ref[cluster] = 1;
+			//this is super bad
+			printf("Found super bad thing\n");
+			set_fat_entry(previous_cluster, FAT12_MASK & CLUST_EOFS, image_buf, bpb); //set previous to EOF
+			set_fat_entry(cluster, FAT12_MASK & CLUST_FREE, image_buf, bpb); //free current
     }
 	return clust_count;
 }
@@ -298,7 +301,7 @@ void orphan_alloc(uint8_t *image_buf, struct bpb33* bpb, u_int16_t cluster, int 
 	int size = j * clust_size;
 	char buffer[64];
 	snprintf(buffer, 64, "found%d.dat", orph_num);
-	struct direntry *dirent = (struct direntry*)cluster_to_addr(0, image_buf, bpb);
+	struct direntry *dirent = (struct direntry*)cluster_to_addr(0, image_buf, bpb); //root dirent
 	write_dirent(dirent, buffer, start_cluster, size);
 }
 void fix_FAT(uint8_t *image_buf, struct bpb33* bpb, int* clust_ref){
