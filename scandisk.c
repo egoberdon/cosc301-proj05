@@ -14,13 +14,33 @@
 #include "fat.h"
 #include "dos.h"
 
+uint16_t free_clust(int* clust_ref, uint16_t cluster, int num_correct, struct bpb33 *bpb, uint8_t *image_buf){
+	u_int16_t extra_cluster = 0;
+	u_int16_t temp_cluster = 0;
+	for(int i = 0; i < num_correct; i++){
+		cluster = get_fat_entry(cluster, image_buf, bpb);
+	}
+	extra_cluster = get_fat_entry(cluster, image_buf, bpb);
+	set_fat_entry(cluster, FAT12_MASK & CLUST_EOFS, image_buf, bpb);
+	int count_freed = 0;
+	while (is_valid_cluster(extra_cluster, bpb))
+		{
+			temp_cluster = extra_cluster;
+			set_fat_entry(extra_cluster, FAT12_MASK & CLUST_FREE, image_buf, bpb);
+			extra_cluster = get_fat_entry(temp_cluster, image_buf, bpb);
+			count_freed++;
+		}
+	set_fat_entry(extra_cluster, FAT12_MASK & CLUST_FREE, image_buf, bpb); //clean up final cluster
+	return count_freed;
+}
+
 //Divides, rounds up, used in sz_chck
 int div_round_up(int dividend, int divisor){
 	return (dividend + (divisor - 1)) / divisor;
 }
 
 //compares size in metadata to size in clusters
-void sz_check(int meta_size, int clust_count, struct bpb33* bpb){
+void sz_check(int meta_size, int clust_count, struct bpb33* bpb, int start_cluster, uint8_t *image_buf, int* clust_ref){
 	int clust_size = bpb->bpbBytesPerSec * bpb->bpbSecPerClust;
 	int max_size = clust_count * clust_size;  //largest possible size according to cluster chain
 	int min_size = max_size - clust_size;   //smallest size according to cluster chain
@@ -31,6 +51,9 @@ void sz_check(int meta_size, int clust_count, struct bpb33* bpb){
   	if (meta_size < min_size){
 		  int no_bad_clust = div_round_up(min_size - meta_size, clust_size);
 			printf("Small YIKES! -> Metadata is smaller than allocated clusters, need to free %d cluster(s).\n", no_bad_clust);
+			printf("Freeing %d clusters\n", no_bad_clust);
+			int freed = free_clust(clust_ref, start_cluster, (meta_size/clust_size), bpb, image_buf);
+			printf("Freed %d clusters\n", freed);
 	}
 }
 
@@ -40,7 +63,7 @@ int checker(uint8_t *image_buf, struct bpb33 *bpb, int* clust_ref, uint16_t clus
   while (is_valid_cluster(cluster, bpb))
     {
 		    clust_count ++;
-        if ((cluster & FAT12_MASK) >= CLUST_BAD){
+        if ((cluster & FAT12_MASK) == (CLUST_BAD & FAT12_MASK)){
           printf("Bad\n");
         }
         clust_ref[cluster] = 1; //good cluster
@@ -139,7 +162,7 @@ uint16_t print_dirent(struct direntry *dirent, int indent, int* clust_ref, uint8
 	int clust_num = 0;
 	size = getulong(dirent->deFileSize);
 	clust_num = checker(image_buf, bpb, clust_ref, start_cluster);
-	sz_check(size, clust_num, bpb);
+	sz_check(size, clust_num, bpb, start_cluster, image_buf, clust_ref);
 	printf("%s.%s (%u bytes) (starting cluster %d) %c%c%c%c\n",
 	       name, extension, size, start_cluster,
 	       ro?'r':' ',
