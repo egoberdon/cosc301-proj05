@@ -298,7 +298,7 @@ void orphan_alloc(uint8_t *image_buf, struct bpb33* bpb, u_int16_t cluster, int 
 	int size = j * clust_size;
 	char buffer[64];
 	snprintf(buffer, 64, "found%d.dat", orph_num);
-	struct direntry *dirent = NULL;
+	struct direntry *dirent = (struct direntry*)cluster_to_addr(0, image_buf, bpb);
 	write_dirent(dirent, buffer, start_cluster, size);
 }
 void fix_FAT(uint8_t *image_buf, struct bpb33* bpb, int* clust_ref){
