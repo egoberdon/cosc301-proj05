@@ -40,13 +40,16 @@ int div_round_up(int dividend, int divisor){
 }
 
 //compares size in metadata to size in clusters
-void sz_check(int meta_size, int clust_count, struct bpb33* bpb, int start_cluster, uint8_t *image_buf, int* clust_ref){
+void sz_check(int meta_size, int clust_count, struct bpb33* bpb, int start_cluster, uint8_t *image_buf, int* clust_ref, struct direntry *dirent){
 	int clust_size = bpb->bpbBytesPerSec * bpb->bpbSecPerClust;
 	int max_size = clust_count * clust_size;  //largest possible size according to cluster chain
 	int min_size = max_size - clust_size;   //smallest size according to cluster chain
 	if (meta_size > max_size){
 		printf("Big YIKES! -> Metadata is bigger than allocated clusters, has size %d, according to clusters size should be between %d and %d\n",
 				meta_size, min_size, max_size);
+				//u_int32_t new_file_size = 0;
+				putulong(dirent->deFileSize, max_size);
+
     }
   	if (meta_size < min_size){
 		  int no_bad_clust = div_round_up(min_size - meta_size, clust_size);
@@ -162,7 +165,7 @@ uint16_t print_dirent(struct direntry *dirent, int indent, int* clust_ref, uint8
 	int clust_num = 0;
 	size = getulong(dirent->deFileSize);
 	clust_num = checker(image_buf, bpb, clust_ref, start_cluster);
-	sz_check(size, clust_num, bpb, start_cluster, image_buf, clust_ref);
+	sz_check(size, clust_num, bpb, start_cluster, image_buf, clust_ref, dirent);
 	printf("%s.%s (%u bytes) (starting cluster %d) %c%c%c%c\n",
 	       name, extension, size, start_cluster,
 	       ro?'r':' ',
