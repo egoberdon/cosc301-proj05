@@ -84,7 +84,9 @@ int checker(uint8_t *image_buf, struct bpb33 *bpb, int* clust_ref, uint16_t clus
     }
     else{
 			//this is super bad
-			printf("Found super bad thing\n");
+			printf("\n");
+			printf("Found super bad thing!!\n");
+			printf("\n");
 			set_fat_entry(previous_cluster, FAT12_MASK & CLUST_EOFS, image_buf, bpb); //set previous to EOF
 			set_fat_entry(cluster, FAT12_MASK & CLUST_FREE, image_buf, bpb); //free current
     }
