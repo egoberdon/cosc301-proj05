@@ -14,32 +14,23 @@
 #include "fat.h"
 #include "dos.h"
 
-void checker(struct direntry *dirent, uint8_t *image_buf, struct bpb33 *bpb, int* clust_ref)
+void checker(uint8_t *image_buf, struct bpb33 *bpb, int* clust_ref, uint16_t cluster)
 {
-    uint16_t cluster = getushort(dirent->deStartCluster);
-    uint32_t bytes_remaining = getulong(dirent->deFileSize);
-    uint16_t cluster_size = bpb->bpbBytesPerSec * bpb->bpbSecPerClust;
-
-    char buffer[MAXFILENAME];
-    //get_dirent(dirent, buffer);
-
-    fprintf(stderr, "doing cat for %s, size %d\n", buffer, bytes_remaining);
 
     while (is_valid_cluster(cluster, bpb))
     {
-        /* map the cluster number to the data location */
-        uint8_t *p = cluster_to_addr(cluster, image_buf, bpb);
-
-        uint32_t nbytes = bytes_remaining > cluster_size ? cluster_size : bytes_remaining;
-
-        fwrite(p, 1, nbytes, stdout);
-        bytes_remaining -= nbytes;
-
+        clust_ref[cluster] = 1; //good cluster
         cluster = get_fat_entry(cluster, image_buf, bpb);
+    }
+    if (is_end_of_file(cluster)){
+      clust_ref[cluster] = 2; //end of file
+    }
+    else{
+      clust_ref[cluster] = 3; //bad boy
     }
 }
 
-uint16_t print_dirent(struct direntry *dirent, int indent, int* clust_ref)
+uint16_t print_dirent(struct direntry *dirent, int indent, int* clust_ref, uint8_t *image_buf, struct bpb33* bpb)
 {
     uint16_t followclust = 0;
 
@@ -121,7 +112,7 @@ uint16_t print_dirent(struct direntry *dirent, int indent, int* clust_ref)
 	int arch = (dirent->deAttributes & ATTR_ARCHIVE) == ATTR_ARCHIVE;
   int start_cluster = getushort(dirent->deStartCluster);
 	size = getulong(dirent->deFileSize);
-
+  checker(image_buf, bpb, clust_ref, start_cluster);
 	printf("%s.%s (%u bytes) (starting cluster %d) %c%c%c%c\n",
 	       name, extension, size, start_cluster,
 	       ro?'r':' ',
@@ -146,7 +137,7 @@ void follow_dir(uint16_t cluster, int indent,
 	for ( ; i < numDirEntries; i++)
 	{
 
-            uint16_t followclust = print_dirent(dirent, indent, clust_ref);
+            uint16_t followclust = print_dirent(dirent, indent, clust_ref, image_buf, bpb);
             if (followclust)
                 follow_dir(followclust, indent+1, image_buf, bpb, clust_ref);
             dirent++;
@@ -166,7 +157,7 @@ void traverse_root(uint8_t *image_buf, struct bpb33* bpb, int* clust_ref)
     int i = 0;
     for ( ; i < bpb->bpbRootDirEnts; i++)
     {
-        uint16_t followclust = print_dirent(dirent, 0, clust_ref);
+        uint16_t followclust = print_dirent(dirent, 0, clust_ref, image_buf, bpb);
         if (is_valid_cluster(followclust, bpb))
             follow_dir(followclust, 1, image_buf, bpb, clust_ref);
 
